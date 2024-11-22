@@ -6,47 +6,74 @@ Zumo32U4Motors motors;
 unsigned int lsValues[3];
 #define lsthreshold 1000
 #define speed 100
-//Hej Søren!!!!!!!!!!
+int state = 0;
+// Hej Søren!!!!!!!!!!
 
 // put function declarations here:
 int m(int, int);
 
-void setup() {
+void setup()
+{
   // put your setup code here, to run once:
   ls.initThreeSensors();
 }
 
-void turnRight(){
-motors.setSpeeds(speed,-speed);
+void turnRight()
+{
+  motors.setSpeeds(speed, -speed);
 }
 
-void turnLeft(){
-motors.setSpeeds(-speed,speed);
+void turnLeft()
+{
+  motors.setSpeeds(-speed, speed);
 }
 
-
-void loop() {
+void loop()
+{
   // put your main code here, to run repeatedly:
   ls.read(lsValues);
-  if(lsValues[0] < lsthreshold && lsValues[1] < lsthreshold && lsValues[2] < lsthreshold) {
-  motors.setSpeeds(speed,speed);
+
+  switch (state)
+  {
+  case 0:
+    if (lsValues[0] < lsthreshold && lsValues[1] < lsthreshold && lsValues[2] < lsthreshold)
+    {
+      motors.setSpeeds(speed, speed);
+    }
+    else
+    {
+      motors.setSpeeds(0, 0);
+      state = 1;
+    }
+    break;
+
+  case 1:
+    if (lsValues[0] > lsthreshold)
+    {
+      turnRight();
+    }
+    else
+    {
+      forward slightly left
+    }
+    break;
+
+  default:
+    break;
   }
-  else{
-    motors.setSpeeds(0,0);
-  }
-  while(lsValues[0] > lsthreshold){
-    turnRight();
-  }
-  if(lsValues[0] > lsthreshold){
+
+  if (lsValues[0] > lsthreshold)
+  {
     follow line on left side;
   }
-  else if(lsValues[2] > lsthreshold){
+  else if (lsValues[2] > lsthreshold)
+  {
     follow line on right side;
   }
-
-  }
+}
 
 // put function definitions here:
-int myFunction(int x, int y) {
+int myFunction(int x, int y)
+{
   return x + y;
 }
