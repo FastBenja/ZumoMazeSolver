@@ -9,13 +9,65 @@ unsigned int lsValues[3];
 int state = 0;
 // Hej Søren!!!!!!!!!!
 
-// put function declarations here:
-int m(int, int);
+void turnRight();
+void turnLeft();
 
 void setup()
 {
-  // put your setup code here, to run once:
   ls.initThreeSensors();
+}
+
+void loop()
+{
+  ls.read(lsValues); // Read linesensor values
+
+  switch (state) // Switch the operating state
+  {
+  case 0: // Case 0: Robot searching for matrix
+    if (lsValues[0] < lsthreshold &&
+        lsValues[1] < lsthreshold &&
+        lsValues[2] < lsthreshold) // All linesensors are not detecting a line
+    {
+      motors.setSpeeds(speed, speed); // Drive forward
+    }
+    else if (lsValues[0] > lsthreshold) // Matrix is to the left or straight in front of the robot
+    {
+      state = 1;
+    }
+    else // Matrix is to the right of the robot
+    {
+      state = 2;
+    }
+    motors.setSpeeds(0, 0); // Stop the movement
+    break;
+
+  case 1:                          // Case 1: Follow line to the left of the robot
+    if (lsValues[0] > lsthreshold) // Robot on line
+    {
+      turnRight(); // Turn off line
+    }
+    else
+    {
+      motors.setSpeeds(speed, speed + 30); // Robot going forward and slightly left
+    }
+    break;
+
+  case 2:                          // Case 1: Follow line to the left of the robot
+    if (lsValues[2] > lsthreshold) // Robot on line
+    {
+      turnLeft(); // Turn off line
+    }
+    else
+    {
+      motors.setSpeeds(speed + 30, speed); // Robot going forward and slightly left
+    }
+    break;
+
+  case 3:
+
+  default:
+    break;
+  }
 }
 
 void turnRight()
@@ -26,62 +78,4 @@ void turnRight()
 void turnLeft()
 {
   motors.setSpeeds(-speed, 0);
-}
-
-void loop()
-{
-  // put your main code here, to run repeatedly:
-  ls.read(lsValues);
-
-  switch (state)
-  {
-  case 0:
-    if (lsValues[0] < lsthreshold && lsValues[1] < lsthreshold && lsValues[2] < lsthreshold)
-    {
-      motors.setSpeeds(speed, speed);
-    }
-    else if (lsValues[0] > lsthreshold)
-    {
-      state = 1;
-    }
-    else
-    {
-      state = 2;
-    }
-    motors.setSpeeds(0, 0);
-    break;
-
-  case 1:
-    if (lsValues[0] > lsthreshold)
-    {
-      turnRight();
-    }
-    else
-    {
-      motors.setSpeeds(speed, speed + 30);
-    }
-    break;
-
-  case 2:
-    if (lsValues[2] > lsthreshold)
-    {
-      turnLeft();
-    }
-    else
-    {
-      motors.setSpeeds(speed + 30, speed);
-    }
-    break;
-  
-  case 3:
-    
-  default:
-    break;
-  }
-}
-
-// put function definitions here:
-int myFunction(int x, int y)
-{
-  return x + y;
 }
