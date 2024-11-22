@@ -1,10 +1,13 @@
 #include <Arduino.h>
 #include <Zumo32U4.h>
 
+Zumo32U4LineSensors ls;
+Zumo32U4Motors motors;
+
 //Hej Søren!!!!!!!!!!
 
 // put function declarations here:
-int myFunction(int, int);
+int m(int, int);
 
 void setup() {
   // put your setup code here, to run once:
