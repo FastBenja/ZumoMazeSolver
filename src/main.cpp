@@ -20,12 +20,12 @@ void setup()
 
 void turnRight()
 {
-  motors.setSpeeds(speed, -speed);
+  motors.setSpeeds(0, -speed);
 }
 
 void turnLeft()
 {
-  motors.setSpeeds(-speed, speed);
+  motors.setSpeeds(-speed, 0);
 }
 
 void loop()
@@ -40,11 +40,15 @@ void loop()
     {
       motors.setSpeeds(speed, speed);
     }
-    else
+    else if (lsValues[0] > lsthreshold)
     {
-      motors.setSpeeds(0, 0);
       state = 1;
     }
+    else
+    {
+      state = 2;
+    }
+    motors.setSpeeds(0, 0);
     break;
 
   case 1:
@@ -54,21 +58,25 @@ void loop()
     }
     else
     {
-      forward slightly left
+      motors.setSpeeds(speed, speed + 30);
     }
     break;
 
+  case 2:
+    if (lsValues[2] > lsthreshold)
+    {
+      turnLeft();
+    }
+    else
+    {
+      motors.setSpeeds(speed + 30, speed);
+    }
+    break;
+  
+  case 3:
+    
   default:
     break;
-  }
-
-  if (lsValues[0] > lsthreshold)
-  {
-    follow line on left side;
-  }
-  else if (lsValues[2] > lsthreshold)
-  {
-    follow line on right side;
   }
 }
 
