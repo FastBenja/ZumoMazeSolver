@@ -1,3 +1,17 @@
+/* 
+
+Instructions:
+======================================
+
+This code should be uploaded to the Zumo
+The Zumo is in the OFF state.
+The Zumo is placed on top of one of the lines.
+The Zumo is turned ON.
+The Zumo will start spinning and calibrating.
+When the Zumo is stationarry, move it to the desired starting position outside the maze.
+Press buton A to start the Zumo.
+*/
+
 #include <Arduino.h>
 #include <Zumo32U4.h>
 #include <PID_v1.h>
