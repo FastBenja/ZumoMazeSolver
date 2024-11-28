@@ -2,118 +2,155 @@
 #include <Zumo32U4.h>
 #include <PID_v1.h>
 
-// Define Variables we'll be connecting to
-double Setpoint = 500, Input, Output;
-// Specify the links and initial tuning parameters
-// Kp=0.14, Ki=0.035, Kd=0.009 works well for outlimit -200, 200
-// Kp = 0.14 * 10, Ki = 0.035 * 10, Kd = 0.009 * 10; with scaling and outlimit -1000 to 1000
-double Kp = 0.14, Ki = 0.035, Kd = 0.009;
+/*
+Kp=0.14, Ki=0.035, Kd=0.009 works well for outlimit -200, 200
+Kp = 0.14 * 10, Ki = 0.035 * 10, Kd = 0.009 * 10; with scaling and outlimit -1000 to 1000
+*/
+double Kp = 0.15, Ki = 0.027, Kd = 0.005; // PID parameters
 
-Zumo32U4LineSensors ls;
-Zumo32U4Motors motors;
-Zumo32U4OLED oled;
-Zumo32U4ButtonA btnA;
-PID pid(&Input, &Output, &Setpoint, Kp, Ki, Kd, DIRECT);
+#define speed 90          // Robot speed (if changed a lot, new PID values will have to be found, keep around 100)
+#define LineThreshold 600 // Threshold for detecting a solid line
+#define turnTime 2200     // The time that the robot should turn in an inside corner
 
-unsigned int lsValues[3];
-#define target 500 // Target value for detecting a line
-#define speed 80
-#define LEFT lsValues[0]
-#define RIGHT lsValues[2]
-int state = 0;
-// Hej Søren!!!!!!!!!!
+int state = 0;                        // Variable to describe the state that the robot is in
+unsigned int lsValues[3];             // Array to store readings from linesensors
+#define LEFT 0                        // Define alias for left
+#define RIGHT 2                       // Define alias for right
+double Setpoint = 500, Input, Output; // Variabels for PID
+
+Zumo32U4LineSensors ls;                                  // Linesensor object
+Zumo32U4Motors motors;                                   // Motors object
+Zumo32U4OLED oled;                                       // Screen object
+Zumo32U4ButtonA btnA;                                    // Button object
+PID pid(&Input, &Output, &Setpoint, Kp, Ki, Kd, DIRECT); // PID object
 
 void turnRight();
 void turnLeft();
 void calibrateLS();
 void printStrings(String, String);
 void followLine(unsigned int);
+void mazeTurn(int);
 
 void setup()
 {
-  ls.initThreeSensors();
-  Serial.begin(9600);
-  pid.SetSampleTime(50);
-  pid.SetOutputLimits(-speed, speed);
-  // turn the PID on
-  pid.SetMode(AUTOMATIC);
+  Serial.begin(9600);    // Initialize serial for debugging
+  ls.initThreeSensors(); // Initialize 3 linesensors
 
-  calibrateLS();
+  pid.SetSampleTime(50);              // Set sampletime for PID
+  pid.SetOutputLimits(-speed, speed); // Set limits for PID output
+  pid.SetMode(AUTOMATIC);             // turn the PID on
+
+  calibrateLS(); // Run the linesensor calibration program
 }
 
+/**
+ * \brief Main loop
+ */
 void loop()
 {
   ls.readCalibrated(lsValues); // Read linesensor values
 
-  // Serial.println("Ls1: " + String(lsValues[0]) + " Ls2: " + String(lsValues[1]) + " Ls3: " + String(lsValues[2]));
-  // Serial.println(lsValues[0]);
+  // Debugging
+  //  Serial.println("Ls1: " + String(lsValues[0]) + " Ls2: " + String(lsValues[1]) + " Ls3: " + String(lsValues[2]));
 
   switch (state) // Switch the operating state
   {
-  case 0:                                                                     // Case 0: Robot searching for matrix
-    if (lsValues[0] < target && lsValues[1] < target && lsValues[2] < target) // All linesensors are not detecting a line
+  case 0: // Case 0: Robot searching for Maze
+    if (lsValues[0] < LineThreshold &&
+        lsValues[1] < LineThreshold &&
+        lsValues[2] < LineThreshold) // All linesensors are not detecting a line
     {
       motors.setSpeeds(speed, speed); // Drive forward
       break;
     }
-    else if (lsValues[0] > target) // Matrix is to the left or straight in front of the robot
+    else if (lsValues[0] > LineThreshold) // Maze is to the left or straight in front of the robot
     {
-      state = 1;
+      state = 1; // Prepare to follow line on the left
     }
-    else // Matrix is to the right of the robot
+    else // Maze is to the right of the robot
     {
-      state = 2;
+      state = 2; // Prepare to follow line on the right
     }
     motors.setSpeeds(0, 0); // Stop the movement
     break;
 
-  case 1: // Case 1: Follow line to the left of the robot
+  case 1: // Case 1: Wait for all linesensors to be off of the line
+    while (lsValues[0] > LineThreshold)
+    {
+      ls.readCalibrated(lsValues); // Update linesensor values
+      motors.setSpeeds(0, -speed); // Turn right
+    }
+    motors.setSpeeds(0, 0); // Stop
+    state = 3;              // Start line following to the left of the robot
+    break;
+
+  case 2: // Case 2: Wait for all linesensors to be off of the line
+    while (lsValues[2] > LineThreshold)
+    {
+      ls.readCalibrated(lsValues); // Update linesensor values
+      motors.setSpeeds(-speed, 0); // Turn left
+    }
+    motors.setSpeeds(0, 0); // Stop
+    state = 4;              // Start line following to the right of the robot
+    break;
+
+  case 3: // Case 3: Follow line to the left of the robot
     followLine(LEFT);
     break;
 
-  case 2: // Case 1: Follow line to the left of the robot
+  case 4: // Case 4: Follow line to the right of the robot
     followLine(RIGHT);
-    break;
-
-  case 3:
-
-  default:
     break;
   }
 }
 
+/**
+ * \brief Starts to turn right with the globally defined speed
+ */
 void turnRight()
 {
-  motors.setSpeeds(0, -speed);
+  motors.setSpeeds(speed, -speed);
 }
 
+/**
+ * \brief Starts to turn left with the globally defined speed
+ */
 void turnLeft()
 {
-  motors.setSpeeds(-speed, 0);
+  motors.setSpeeds(-speed, speed);
 }
 
+/**
+ * \brief Place the robot on a tape line and run this function.
+ * When the program returns from the function, the linesensors have been calibrated.
+ */
 void calibrateLS()
 {
-  printStrings(F("Cali-"), F("brate LS"));
+  printStrings(F("Cali-"), F("brate LS")); // Print a calibration message
 
-  for (uint16_t i = 0; i < 120; i++)
+  for (uint16_t i = 0; i < 120; i++) // Run the calibration
   {
-    if (i > 30 && i <= 90)
+    if (i > 30 && i <= 90) // Rotate left
     {
       motors.setSpeeds(-200, 200);
     }
-    else
+    else // Rotate right
     {
       motors.setSpeeds(200, -200);
     }
-    ls.calibrate();
+    ls.calibrate(); // Calibrate
   }
-  motors.setSpeeds(0, 0);
+  motors.setSpeeds(0, 0); // Stop
 
-  printStrings(F("Done!"), F("Pres A"));
-  btnA.waitForButton();
+  printStrings(F("Done!"), F("Pres A")); // Print that the calibration is done
+  btnA.waitForButton();                  // Wait for user pressing button A
 }
 
+/**
+ * \brief Prints text to the OLED
+ * \param str1 String to print on the upper line of the OLED
+ * \param str2 String to print on the lower line of the OLED
+ */
 void printStrings(String str1, String str2)
 {
   oled.clear();
@@ -122,23 +159,54 @@ void printStrings(String str1, String str2)
   oled.print(str2);
 }
 
-void followLine(unsigned int sens)
+/**
+ * \brief Main line following rutine
+ * \param side Specify the side that the line is, compared to the orientation of the robot.
+ */
+void followLine(unsigned int side)
 {
-  Input = sens;
-  ls.readCalibrated(lsValues);
-  pid.Compute(); // Compute pid output.
-  int speedLeft = speed - Output;
-  int speedRight = speed + Output;
+  Input = lsValues[side];      // Input for PID is the sensor which corresponds to the correct side
+  ls.readCalibrated(lsValues); // Keep line sensor values updated
+  pid.Compute();               // Compute pid output
+  int speedLeft;               // Initialize a variable to hold the calculated output for the left motor
+  int speedRight;              // Initialize a variable to hold the calculated output for the right motor
 
-  //int speedLeft = speed - speed * (Output / 1000);
-  //int speedRight = speed + speed * (Output / 1000);
-  //motors.setSpeeds(speedLeft, speedRight);
-  if (sens >800 && lsValues[1] > 800)
+  if (side == RIGHT) // If robot is following a line to the right of itself
   {
-  motors.setSpeeds(speed, -speed);
-  delay(2000);
+    speedLeft = speed + Output;  // Left is more positive that right side for positive PID output
+    speedRight = speed - Output; //
+    mazeTurn(side);              // Check for inside turns
   }
-  motors.setSpeeds(speedLeft, speedRight);
 
-  Serial.println("Reading: " + String(sens) + "\tOut: " + String(Output) + "\tLeft: " + String(speedLeft) + " \tRight: " + String(speedRight));
+  if (side == LEFT) // If robot is following a line to the right of itself
+  {
+    speedLeft = speed - Output;  // Left is more negative that right side for positive PID output
+    speedRight = speed + Output; //
+    mazeTurn(side);              // Check for inside turns
+  }
+
+  motors.setSpeeds(speedLeft, speedRight); // Set the motorspeeds that have been calculated
+
+  // Debugging
+  // Serial.println("Reading: " + String(lsValues[side]) + "\tOut: " + String(Output) + "\tLeft: " + String(speedLeft) + " \tRight: " + String(speedRight));
+}
+
+/**
+ * \brief Should be called very often. If encountering an inside turn, the robot will execute a turn based on the specified direction
+ * \param dir Specify the direction to turn
+ */
+void mazeTurn(int dir)
+{
+  if (lsValues[dir] > LineThreshold && lsValues[1] > LineThreshold) // Encountered a line head on
+  {
+    if (dir == RIGHT) // Going right, turn left
+    {
+      motors.setSpeeds(-80, 80);
+    }
+    if (dir == LEFT) // Going left, turn right
+    {
+      motors.setSpeeds(80, -80);
+    }
+    delay(turnTime); // Wait for the robot to turn
+  }
 }
