@@ -1,9 +1,9 @@
-/* 
+/*
 
 Instructions:
 ======================================
 
-This code should be uploaded to the Zumo
+This code should be uploaded to the Zumo with a OLED screen.
 The Zumo is in the OFF state.
 The Zumo is placed on top of one of the lines.
 The Zumo is turned ON.
@@ -23,10 +23,11 @@ Kp = 0.14 * 10, Ki = 0.035 * 10, Kd = 0.009 * 10; with scaling and outlimit -100
 double Kp = 0.15, Ki = 0.027, Kd = 0.005; // PID parameters
 
 #define speed 90          // Robot speed (if changed a lot, new PID values will have to be found, keep around 100)
-#define LineThreshold 600 // Threshold for detecting a solid line
-#define turnTime 2200     // The time that the robot should turn in an inside corner
+#define LineThreshold 300 // Threshold for detecting a solid line
+#define turnTime 1900     // The time that the robot should turn in an inside corner
 
 int state = 0;                        // Variable to describe the state that the robot is in
+int side;                             // Variable to store the side that that the robot is driving
 unsigned int lsValues[3];             // Array to store readings from linesensors
 #define LEFT 0                        // Define alias for left
 #define RIGHT 2                       // Define alias for right
@@ -38,12 +39,14 @@ Zumo32U4OLED oled;                                       // Screen object
 Zumo32U4ButtonA btnA;                                    // Button object
 PID pid(&Input, &Output, &Setpoint, Kp, Ki, Kd, DIRECT); // PID object
 
+// Function definitions
 void turnRight();
 void turnLeft();
 void calibrateLS();
 void printStrings(String, String);
 void followLine(unsigned int);
 void mazeTurn(int);
+int faceLine();
 
 void setup()
 {
@@ -51,7 +54,7 @@ void setup()
   ls.initThreeSensors(); // Initialize 3 linesensors
 
   pid.SetSampleTime(50);              // Set sampletime for PID
-  pid.SetOutputLimits(-speed, speed); // Set limits for PID output
+  pid.SetOutputLimits(-speed*2, speed*2); // Set limits for PID output
   pid.SetMode(AUTOMATIC);             // turn the PID on
 
   calibrateLS(); // Run the linesensor calibration program
@@ -70,20 +73,19 @@ void loop()
   switch (state) // Switch the operating state
   {
   case 0: // Case 0: Robot searching for Maze
-    if (lsValues[0] < LineThreshold &&
-        lsValues[1] < LineThreshold &&
-        lsValues[2] < LineThreshold) // All linesensors are not detecting a line
+    side = faceLine();
+
+    if (side == LEFT) // Maze is to the left or straight in front of the robot
     {
-      motors.setSpeeds(speed, speed); // Drive forward
-      break;
+      motors.setSpeeds(speed, -speed); // Turn right
+      delay(1100);                     // Turn 90 degrees
+      state = 1;                       // Prepare to follow line on the left
     }
-    else if (lsValues[0] > LineThreshold) // Maze is to the left or straight in front of the robot
+    if (side == RIGHT) // Maze is to the right of the robot
     {
-      state = 1; // Prepare to follow line on the left
-    }
-    else // Maze is to the right of the robot
-    {
-      state = 2; // Prepare to follow line on the right
+      motors.setSpeeds(-speed, speed); // Turn left
+      delay(1100);                     // Turn 90 degrees
+      state = 2;                       // Prepare to follow line on the right
     }
     motors.setSpeeds(0, 0); // Stop the movement
     break;
@@ -94,8 +96,8 @@ void loop()
       ls.readCalibrated(lsValues); // Update linesensor values
       motors.setSpeeds(0, -speed); // Turn right
     }
-    motors.setSpeeds(0, 0); // Stop
-    state = 3;              // Start line following to the left of the robot
+
+    state = 3; // Start line following to the left of the robot
     break;
 
   case 2: // Case 2: Wait for all linesensors to be off of the line
@@ -104,8 +106,8 @@ void loop()
       ls.readCalibrated(lsValues); // Update linesensor values
       motors.setSpeeds(-speed, 0); // Turn left
     }
-    motors.setSpeeds(0, 0); // Stop
-    state = 4;              // Start line following to the right of the robot
+
+    state = 4; // Start line following to the right of the robot
     break;
 
   case 3: // Case 3: Follow line to the left of the robot
@@ -223,4 +225,61 @@ void mazeTurn(int dir)
     }
     delay(turnTime); // Wait for the robot to turn
   }
+}
+
+/**
+ * \brief Makes the robot go forward until it encounters a line.
+ * When a line is found the robot will turn itself perpendicular to the line.
+ * When the robot is perpendicular, the function returns.
+ * \returns The side that the robot first encountered the line on */
+int faceLine()
+{
+  bool sideDetermined = false;
+  int side = LEFT; // Default side is left, this is declared here to make sure that if the robot is starting on a line it still has a valid side.
+  bool leftHasTouched = false;
+  bool rightHasTouched = false;
+
+  while (!leftHasTouched || !rightHasTouched) // While both linesensors are not on a line
+  {
+    ls.readCalibrated(lsValues); // Keep line sensor values updated
+    Serial.println("LS:0 " + String(lsValues[0]) + "\t LS2: " + String(lsValues[2]));
+    motors.setSpeeds(speed, speed); // Drive forward
+
+    if (!sideDetermined && lsValues[0] > LineThreshold) // First encountered line on the left
+    {
+      side = LEFT;
+      sideDetermined = true;
+    }
+    if (!sideDetermined && lsValues[2] > LineThreshold) // First encountered line on the right
+    {
+      side = RIGHT;
+      sideDetermined = true;
+    }
+    if (lsValues[1] > LineThreshold)
+    {
+      motors.setSpeeds(-speed, -speed);
+      delay(700);
+      motors.setSpeeds(-speed, speed);
+      delay(500);
+      while (lsValues[2] < LineThreshold)
+      {
+        ls.readCalibrated(lsValues); // Keep line sensor values updated
+        motors.setSpeeds(speed + 20, speed);
+      }
+    }
+
+    while (lsValues[0] > LineThreshold) // While left sensor is seeing a line
+    {
+      leftHasTouched = true;
+      ls.readCalibrated(lsValues); // Keep line sensor values updated
+      motors.setSpeeds(-speed, 0); // Reverse with left belt
+    }
+    while (lsValues[2] > LineThreshold) // While right sensor is seeing a line
+    {
+      rightHasTouched = true;
+      ls.readCalibrated(lsValues); // Keep line sensor values updated
+      motors.setSpeeds(0, -speed); // Reverse with right belt
+    }
+  }
+  return side;
 }
