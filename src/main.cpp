@@ -12,19 +12,22 @@ When the Zumo is stationarry, move it to the desired starting position outside t
 Press buton A to start the Zumo.
 */
 
+//Included libraries:
 #include <Arduino.h>
 #include <Zumo32U4.h>
 #include <PID_v1.h>
 
 /*
 Kp=0.14, Ki=0.035, Kd=0.009 works well for outlimit -200, 200
-Kp = 0.14 * 10, Ki = 0.035 * 10, Kd = 0.009 * 10; with scaling and outlimit -1000 to 1000
+Kp = 0.14 * 10, Ki = 0.035 * 10, Kd = 0.009 * 10; with scaling method and outlimit -1000 to 1000
 */
-double Kp = 0.15, Ki = 0.027, Kd = 0.005; // PID parameters
+
+// PID parameters
+double Kp = 0.15, Ki = 0.027, Kd = 0.005; 
 
 #define speed 90          // Robot speed (if changed a lot, new PID values will have to be found, keep around 100)
 #define LineThreshold 300 // Threshold for detecting a solid line
-#define turnTime 1900     // The time that the robot should turn in an inside corner
+#define turnTime 2000     // The time that the robot should turn in an inside corner
 
 int state = 0;                        // Variable to describe the state that the robot is in
 int side;                             // Variable to store the side that that the robot is driving
@@ -53,9 +56,9 @@ void setup()
   Serial.begin(9600);    // Initialize serial for debugging
   ls.initThreeSensors(); // Initialize 3 linesensors
 
-  pid.SetSampleTime(50);              // Set sampletime for PID
-  pid.SetOutputLimits(-speed*2, speed*2); // Set limits for PID output
-  pid.SetMode(AUTOMATIC);             // turn the PID on
+  pid.SetSampleTime(50);                      // Set sampletime for PID
+  pid.SetOutputLimits(-speed * 2, speed * 2); // Set limits for PID output
+  pid.SetMode(AUTOMATIC);                     // turn the PID on
 
   calibrateLS(); // Run the linesensor calibration program
 }
@@ -234,15 +237,18 @@ void mazeTurn(int dir)
  * \returns The side that the robot first encountered the line on */
 int faceLine()
 {
-  bool sideDetermined = false;
-  int side = LEFT; // Default side is left, this is declared here to make sure that if the robot is starting on a line it still has a valid side.
-  bool leftHasTouched = false;
-  bool rightHasTouched = false;
+  bool sideDetermined = false;  // Variable to check if a side has been determined
+  int side = LEFT;              // Default side is left, this is declared here to make sure that if the robot is starting on a line it still has a valid side.
+  bool leftHasTouched = false;  // Left sensor has been on a line
+  bool rightHasTouched = false; // Right sensor has been on a line
 
-  while (!leftHasTouched || !rightHasTouched) // While both linesensors are not on a line
+  while (!leftHasTouched || !rightHasTouched) // While both linesensors has not been on a line
   {
     ls.readCalibrated(lsValues); // Keep line sensor values updated
-    Serial.println("LS:0 " + String(lsValues[0]) + "\t LS2: " + String(lsValues[2]));
+
+    // Debugging
+    // Serial.println("LS:0 " + String(lsValues[0]) + "\t LS2: " + String(lsValues[2]));
+
     motors.setSpeeds(speed, speed); // Drive forward
 
     if (!sideDetermined && lsValues[0] > LineThreshold) // First encountered line on the left
@@ -255,16 +261,16 @@ int faceLine()
       side = RIGHT;
       sideDetermined = true;
     }
-    if (lsValues[1] > LineThreshold)
+    if (lsValues[1] > LineThreshold) // If robot first encounters the maze on one of its corners
     {
-      motors.setSpeeds(-speed, -speed);
-      delay(700);
-      motors.setSpeeds(-speed, speed);
-      delay(500);
-      while (lsValues[2] < LineThreshold)
+      motors.setSpeeds(-speed, -speed);   // Reverse
+      delay(700);                         // Reverse distance
+      motors.setSpeeds(-speed, speed);    // Turn
+      delay(500);                         // Turn amount
+      while (lsValues[2] < LineThreshold) // Search for line again
       {
-        ls.readCalibrated(lsValues); // Keep line sensor values updated
-        motors.setSpeeds(speed + 20, speed);
+        ls.readCalibrated(lsValues);         // Keep line sensor values updated
+        motors.setSpeeds(speed + 20, speed); // Approach the maze
       }
     }
 
